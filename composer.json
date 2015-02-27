@@ -1,0 +1,23 @@
+{
+    "name": "ostashevdv/yii2-image",
+    "description": "обертка над intervention/image",
+    "type": "yii2-extension",
+    "keywords": ["yii2","image","thumb","gd","imagick"],
+    "license": "BSD-3-Clause",
+    "authors": [
+        {
+            "name": "ostashevdv",
+            "email": "ostashevdv@gmail.com"
+        }
+    ],
+    "require": {
+        "yiisoft/yii2": "~2.0.0",
+        "intervention/image": "dev-master",
+        "sabre/uri": "dev-master"
+    },
+    "autoload": {
+        "psr-4": {
+            "ostashevdv\\image\\": "src"
+        }
+    }
+}
