@@ -7,6 +7,7 @@
 namespace ostashevdv\image;
 
 
+use Intervention\Image\Exception\NotReadableException;
 use Yii;
 use yii\base\Component;
 use yii\helpers\FileHelper;
@@ -17,7 +18,10 @@ class ImageManager extends Component
     public $driver = 'imagick';
 
     /** @var string путь к папке с кешем изображений */
-    public $cachePath = '@web/assets/thumbs/';
+    public $cachePath = '/assets/thumbs/';
+
+    /** @var null|string изображение заглушка  */
+    public $imageCap = null;
 
     /** @var int ширина по умолчанию */
     public $defaultWidth = 600;
@@ -99,17 +103,28 @@ class ImageManager extends Component
         /** @var параметры для создания кеша $dest */
         $dist = [];
         $dist['name'] = md5($url)."[{$width}x{$height}].".pathinfo($url, PATHINFO_EXTENSION);
-        $dist['dir'] = FileHelper::normalizePath(Yii::getAlias('@webroot') . '/' . Yii::getAlias($cachePath));
-        $dist['path'] = $dist['dir'].DIRECTORY_SEPARATOR.$dist['name'];
+        $dist['dir'] = Yii::getAlias('@webroot'.$cachePath);
+        $dist['path'] = $dist['dir'].$dist['name'];
 
         if (!file_exists($dist['path'])) {
             try {
                 FileHelper::createDirectory($dist['dir']);
                 $this->make($url)->fit($width, $height)->save($dist['path']);
-            } catch (\Exception $e) {
-                return null;
+            }
+            catch( NotReadableException $e) {
+                if ($this->imageCap!==null) {
+                    // Нормализация url
+                    $url = \Sabre\Uri\normalize($this->imageCap);
+                    $parts = \Sabre\Uri\parse($url);
+                    if (!isset($parts['host'])) {
+                        $host = \yii\helpers\Url::home(true);
+                        $url = \Sabre\Uri\normalize($host . $url);
+                    }
+                    $this->make($url)->fit($width, $height)->save($dist['path']);
+                }
             }
         }
-        return Yii::getAlias($cachePath) .'/'. $dist['name'];
+
+        return $cachePath . $dist['name'];
     }
 } 
