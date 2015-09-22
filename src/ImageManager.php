@@ -10,6 +10,8 @@ namespace ostashevdv\image;
 use Intervention\Image\Exception\NotReadableException;
 use Yii;
 use yii\base\Component;
+use yii\base\InvalidConfigException;
+use yii\helpers\ArrayHelper;
 use yii\helpers\FileHelper;
 
 class ImageManager extends Component
@@ -17,17 +19,39 @@ class ImageManager extends Component
     /** @var string драйвер обрабатывающий изображения*/
     public $driver = 'imagick';
 
-    /** @var string путь к папке с кешем изображений */
-    public $cachePath = '/assets/thumbs/';
+    /** @var int ширина по умолчанию */
+    public $defaultWidth = 640;
+
+    /** @var int высота по умолчанию */
+    public $defaultHeight = 320;
 
     /** @var null|string изображение заглушка  */
     public $imageCap = null;
 
-    /** @var int ширина по умолчанию */
-    public $defaultWidth = 600;
+    /** @var array пользовательские настройки миниатюр */
+    public $thumbs = [];
 
-    /** @var int высота по умолчанию */
-    public $defaultHeight = 600;
+    /** @var array настройки миниатюр по умолчанию */
+    protected $_thumbs = [
+        'sm' => ['width' => 320,  'height' => 180],
+        'md' => ['width' => 640,  'height' => 360],
+        'lg' => ['width' => 1280, 'height' => 720]
+    ];
+
+    /** @var string папка на сервере для кеша */
+    public $cacheDir = '@webroot/assets/thumbs';
+
+    /** @var string  */
+    public $cacheUrl = '@web/assets/thumbs';
+
+    public function init()
+    {
+        $this->cacheDir = rtrim($this->cacheDir, '/') . '/';
+        $this->cacheUrl = rtrim($this->cacheUrl, '/') . '/';
+        $this->thumbs = ArrayHelper::merge($this->_thumbs, $this->thumbs);
+    }
+
+
 
     /**
      * Initiates an Image instance from different input types
@@ -76,55 +100,59 @@ class ImageManager extends Component
         );
     }
 
-    /**
-     * @param string $url
-     * @param int $width
-     * @param int $height
-     * @param string | callable $cachePath папка для кеша
-     * @return string | null
-     */
-    public function thumb($url, $width=null, $height=null, $cachePath=null)
+    public function thumb($url, $mode = 'md')
     {
-        $width = $width===null ? $this->defaultWidth : $width;
-        $height = $height===null ? $this->defaultWidth : $height;
-        $cachePath = $cachePath===null ? $this->cachePath : $cachePath;
-        if(is_callable($cachePath)) {
-            $cachePath = call_user_func($cachePath, $url);
+        // Устанавливаем ширину и высоту миниатюры
+        is_array($mode) ? @extract($mode) : @extract($this->thumbs[$mode]);
+        if (empty($width) || empty($height)) {
+            throw new InvalidConfigException('Вы должны указать корректную настройку ширины и высоты миниатюры.');
         }
 
-        // Нормализация url
-        $url = \Sabre\Uri\normalize($url);
-        $parts = \Sabre\Uri\parse($url);
-        if (!isset($parts['host'])) {
-            $host = \yii\helpers\Url::home(true);
-            $url = \Sabre\Uri\normalize($host . $url);
+        //Нормализация Url
+        $url = $this->normalizeUrl($url);
+
+        // Формируем параметры миниатюры
+        $dest = [];
+        $dest['name'] = md5($url)."-{$mode}.".pathinfo($url, PATHINFO_EXTENSION);
+        $dest['dir'] = Yii::getAlias($this->cacheDir);
+        $dest['path'] = $dest['dir'].$dest['name'];
+        $dest['url'] = Yii::getAlias($this->cacheUrl.$dest['name']);
+
+        //Проверяем наличие изображения. Результаты функции file_exists() кешируется. Подробнее смотрите в разделе clearstatcache()
+        if (file_exists($dest['path'])) {
+            return $dest['url'];
         }
 
-        /** @var параметры для создания кеша $dest */
-        $dist = [];
-        $dist['name'] = md5($url)."[{$width}x{$height}].".pathinfo($url, PATHINFO_EXTENSION);
-        $dist['dir'] = Yii::getAlias('@webroot'.$cachePath);
-        $dist['path'] = $dist['dir'].$dist['name'];
+        //Создание миниатюры
+        try {
+            FileHelper::createDirectory($dest['dir']);
+            $this->make($url)->fit($width, $height)->save($dest['path']);
+        } catch( NotReadableException $e) {
 
-        if (!file_exists($dist['path'])) {
-            try {
-                FileHelper::createDirectory($dist['dir']);
-                $this->make($url)->fit($width, $height)->save($dist['path']);
-            }
-            catch( NotReadableException $e) {
-                if ($this->imageCap!==null) {
-                    // Нормализация url
-                    $url = \Sabre\Uri\normalize($this->imageCap);
-                    $parts = \Sabre\Uri\parse($url);
-                    if (!isset($parts['host'])) {
-                        $host = \yii\helpers\Url::home(true);
-                        $url = \Sabre\Uri\normalize($host . $url);
-                    }
-                    $this->make($url)->fit($width, $height)->save($dist['path']);
-                }
-            }
         }
 
-        return $cachePath . $dist['name'];
+        return $dest['url'];
     }
+
+
+    /**
+     * Нормализиция Url
+     * @param $url
+     * @return string
+     */
+    protected function normalizeUrl($url)
+    {
+        $url = \Sabre\Uri\normalize($url);
+        $parse = \Sabre\Uri\parse($url);
+
+        $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : $_SERVER['SERVER_NAME'];
+        $parse['host'] = isset($parse['host']) ? $parse['host'] : $host;
+
+        $parse['scheme'] = isset($parse['scheme']) ? $parse['scheme'] : 'http';
+
+        return \Sabre\Uri\build($parse);
+    }
+
+
+
 } 
