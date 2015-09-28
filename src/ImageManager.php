@@ -113,7 +113,7 @@ class ImageManager extends Component
 
         // Формируем параметры миниатюры
         $dest = [];
-        $dest['name'] = md5($url)."-{$mode}.".pathinfo($url, PATHINFO_EXTENSION);
+        $dest['name'] = md5($url)."-[{$width}x{$height}].".pathinfo($url, PATHINFO_EXTENSION);
         $dest['dir'] = Yii::getAlias($this->cacheDir);
         $dest['path'] = $dest['dir'].$dest['name'];
         $dest['url'] = Yii::getAlias($this->cacheUrl.$dest['name']);
