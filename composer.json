@@ -13,7 +13,7 @@
     "require": {
         "yiisoft/yii2": "~2.0.0",
         "intervention/image": "*",
-        "sabre/uri": "dev-master"
+        "sabre/uri": "*"
     },
     "autoload": {
         "psr-4": {
